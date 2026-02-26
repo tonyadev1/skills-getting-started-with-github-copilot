@@ -4,6 +4,35 @@ document.addEventListener("DOMContentLoaded", () => {
   const signupForm = document.getElementById("signup-form");
   const messageDiv = document.getElementById("message");
 
+  // helper for removing a participant
+  async function removeParticipant(activity, email) {
+    try {
+      const response = await fetch(
+        `/activities/${encodeURIComponent(activity)}/signup?email=${encodeURIComponent(email)}`,
+        { method: "DELETE" }
+      );
+      const result = await response.json();
+
+      if (response.ok) {
+        messageDiv.textContent = result.message;
+        messageDiv.className = "success";
+        // refresh the list so counts and names update
+        fetchActivities();
+      } else {
+        messageDiv.textContent = result.detail || "Could not remove participant";
+        messageDiv.className = "error";
+      }
+
+      messageDiv.classList.remove("hidden");
+      setTimeout(() => messageDiv.classList.add("hidden"), 5000);
+    } catch (err) {
+      messageDiv.textContent = "Failed to remove participant.";
+      messageDiv.className = "error";
+      messageDiv.classList.remove("hidden");
+      console.error("Error removing participant:", err);
+    }
+  }
+
   // Function to fetch activities from API
   async function fetchActivities() {
     try {
@@ -20,12 +49,33 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const spotsLeft = details.max_participants - details.participants.length;
 
+        // build participants list HTML
+        let participantsHTML = "<p><strong>Participants:</strong></p>";
+        if (details.participants.length === 0) {
+          participantsHTML += "<p class=\"info\">No one has signed up yet.</p>";
+        } else {
+          participantsHTML += "<ul class=\"participants-list\">";
+          details.participants.forEach((email) => {
+            participantsHTML += `<li>${email} <span class=\"remove-icon\" data-email=\"${email}\" title=\"Unregister\">&times;</span></li>`;
+          });
+          participantsHTML += "</ul>";
+        }
+
         activityCard.innerHTML = `
           <h4>${name}</h4>
           <p>${details.description}</p>
           <p><strong>Schedule:</strong> ${details.schedule}</p>
           <p><strong>Availability:</strong> ${spotsLeft} spots left</p>
+          ${participantsHTML}
         `;
+
+        // attach listeners to remove icons
+        activityCard.querySelectorAll(".remove-icon").forEach((icon) => {
+          icon.addEventListener("click", () => {
+            const email = icon.dataset.email;
+            removeParticipant(name, email);
+          });
+        });
 
         activitiesList.appendChild(activityCard);
 
@@ -62,6 +112,8 @@ document.addEventListener("DOMContentLoaded", () => {
         messageDiv.textContent = result.message;
         messageDiv.className = "success";
         signupForm.reset();
+        // update activities to show new participant immediately
+        fetchActivities();
       } else {
         messageDiv.textContent = result.detail || "An error occurred";
         messageDiv.className = "error";
